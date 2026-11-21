@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from app.services.base import BaseModuleService
+from app.services.field_identity import field_tokens
 from app.store import store
 
 
@@ -50,13 +51,14 @@ class LineageGraphService(BaseModuleService):
         """追溯字段的端到端血缘链路。
 
         从目标表出发，沿血缘边反向追溯字段的来源表和处理节点，
-        构建字段级数据流向图。
+        构建字段级数据流向图。字段按分隔符精确匹配，避免 order_code
+        误命中 order_code_v2 这类前缀相同的列。
         """
         edges = store.rows(self.MODULE)
+        token = str(field_name).strip().casefold()
         field_edges: list[dict[str, Any]] = []
         for edge in edges:
-            pass_fields = str(edge.get("传递字段", ""))
-            if field_name.casefold() in pass_fields.casefold():
+            if token in field_tokens(edge.get("传递字段", "")):
                 field_edges.append({
                     "source": edge.get("源节点"),
                     "target": edge.get("目标节点"),

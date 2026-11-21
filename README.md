@@ -60,6 +60,7 @@ npm run dev
 | 水位追踪 | `watermark_tracker` | 水位记录 | 管线标识、分区字段、当前水位 |
 | 资源池 | `resource_pool` | 计算资源 | 池名称、总核数、总内存 |
 | 血缘图谱 | `lineage_graph` | 血缘边 | 源节点、目标节点、传递字段 |
+| 字段身份 | `/field-identity` | 字段身份/别名 | 表、列、生效期、旧别名 |
 | 异常捕获 | `exception_capture` | 异常记录 | 发生时间、所属管线、异常类型 |
 | 模板仓库 | `template_store` | 处理模板 | 模板名称、处理类型、输入Schema |
 | 分区扫描 | `partition_scan` | 扫描报告 | 报告时间、目标表、分区总数 |
@@ -76,6 +77,27 @@ npm run dev
   `frontend/src/domain/<模块>.ts`，用于承载真实业务差异并维持36题位容量。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+
+## 字段身份与别名有效期
+
+字段身份按「表 + 列 + 生效期」确定，接口在 `/api/field-identities`：
+
+- `POST /fields`、`POST /aliases`：登记列身份和旧别名。别名有效期必须落在同表
+  目标列的生效期内，同一别名在重叠有效期上会被拒绝，不能用新列名覆盖旧历史。
+- `GET /resolve?table=&name=&effective_date=`：按表与生效日期核实字段身份，同时
+  返回读取路径、下游表和影响字段；不给表名时遇到同名候选返回 `ambiguous=true`
+  且不填生产表。
+- `POST /aliases/{id}/revisions`：修订别名口径，只关闭旧记录（保留原生效日期和
+  原列），并从切换日起按新列重算血缘路径与写入结果。
+- `GET /history-query`：修订后按历史日期回查当时能确认的生产表和列。
+- `POST /impact-entries`、`POST /impact-entries/from-change`：用字段影响数据生成
+  写入任务的评估条目，条目上直接标出 `可提交` 与 `缺失证据`。
+- `POST /impact-entries/{id}/confirm`、`GET /candidate-columns`、`POST /drill`：
+  证据齐全的条目确认后才进入候选列演练输入。
+
+业务路由另外提供 `GET /api/business/lineage/field-trace`（精确字段匹配）和
+`GET /api/business/schema/field-impact`（带生效日期的字段影响分析）。
+页面入口：`/field-identity`。回归测试：`cd backend && .venv/bin/python -m unittest discover -s tests -v`。
 
 领域：数据工程
 子方向：数仓与数据湖

@@ -231,6 +231,50 @@ def analyze_lineage_impact(node_id: str) -> dict[str, Any]:
     }
 
 
+@router.get("/lineage/field-trace")
+def trace_field_lineage(field: str) -> dict[str, Any]:
+    """按字段追溯血缘路径：传递字段按分隔符精确匹配，不做子串命中。"""
+    from app.services.lineage_graph import LineageGraphService
+
+    return LineageGraphService().trace_field_lineage(field)
+
+
+# ---- 字段身份影响 ----
+
+@router.get("/schema/field-impact")
+def analyze_schema_field_impact(
+    table: str,
+    field: str,
+    effective_date: str | None = None,
+) -> dict[str, Any]:
+    """统计字段影响：给出生效日期时先核实生产表与列，同名候选不猜来源。"""
+    from app.services.schema_evolution import SchemaEvolutionService
+
+    return SchemaEvolutionService().analyze_field_impact(
+        table, field, effective_date,
+    )
+
+
+@router.post("/schema/{change_id}/impact-entries")
+def build_schema_impact_entries(change_id: int, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    """用字段影响数据为 Schema 变更生成写入任务的评估条目。"""
+    from app.services.field_identity import (
+        FieldIdentityError, field_identity_service,
+    )
+
+    body = body or {}
+    try:
+        return field_identity_service.generate_from_change(
+            change_id,
+            column=body.get("column"),
+            columns=body.get("columns"),
+            effective_date=body.get("effective_date"),
+            note=body.get("note"),
+        )
+    except FieldIdentityError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 # ---- 资源健康 ----
 
 @router.get("/resources/health")
